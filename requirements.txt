@@ -3,3 +3,6 @@ scipy
 matplotlib 
 librosa 
 soundfile
+sounddevice
+noisereduce
+PyQt6
