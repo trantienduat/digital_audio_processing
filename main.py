@@ -7,7 +7,7 @@ import librosa
 import time
 import matplotlib.pyplot as plt
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QPushButton, QVBoxLayout, QLabel, QFileDialog, QSlider, QProgressBar, QComboBox
+    QApplication, QWidget, QPushButton, QGridLayout, QLabel, QFileDialog, QSlider, QProgressBar, QComboBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
@@ -95,63 +95,71 @@ class AudioApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Audio Processing App")
-        self.setGeometry(100, 100, 400, 550)
+        self.setGeometry(100, 100, 500, 400)
 
-        layout = QVBoxLayout()
-
+        layout = QGridLayout()
+        
+        # Basic Controls
         self.status_label = QLabel("🎙️ Ready to record or import", self)
-        layout.addWidget(self.status_label)
-
+        layout.addWidget(self.status_label, 0, 0, 1, 2)
+        
         self.import_button = QPushButton("📂 Import WAV File", self)
+        layout.addWidget(self.import_button, 1, 0)
         self.import_button.clicked.connect(self.import_audio)
-        layout.addWidget(self.import_button)
-
+        
         self.record_button = QPushButton("🎤 Record Audio", self)
+        layout.addWidget(self.record_button, 1, 1)
         self.record_button.clicked.connect(self.record_audio)
-        layout.addWidget(self.record_button)
-
+        
+        self.play_button = QPushButton("⏯️ Play/Pause Audio", self)
+        layout.addWidget(self.play_button, 2, 0)
+        self.play_button.clicked.connect(self.toggle_play_pause)
+        
+        self.stop_button = QPushButton("⏹️ Stop Audio", self)
+        layout.addWidget(self.stop_button, 2, 1)
+        self.stop_button.clicked.connect(self.stop_audio)
+        
+        self.revert_button = QPushButton("↩️ Revert Audio", self)
+        layout.addWidget(self.revert_button, 3, 0, 1, 2)
+        self.revert_button.clicked.connect(self.revert_audio)
+        
+        # Effects Section
+        self.effects_label = QLabel("🎛️ Audio Effects", self)
+        layout.addWidget(self.effects_label, 4, 0, 1, 2)
+        
+        self.noise_button = QPushButton("🔇 Reduce Noise", self)
+        layout.addWidget(self.noise_button, 5, 0)
+        self.noise_button.clicked.connect(self.apply_noise_reduction)
+        
+        self.echo_button = QPushButton("🎶 Add Echo", self)
+        layout.addWidget(self.echo_button, 5, 1)
+        self.echo_button.clicked.connect(self.add_echo)
+        
+        self.freq_button = QPushButton("📊 Analyze Frequency", self)
+        layout.addWidget(self.freq_button, 6, 0, 1, 2)
+        self.freq_button.clicked.connect(self.analyze_frequency)
+        
+        # Playback Speed & Save
         self.playback_speed_label = QLabel("Playback Speed:", self)
-        layout.addWidget(self.playback_speed_label)
+        layout.addWidget(self.playback_speed_label, 7, 0)
+        
         self.speed_combo = QComboBox(self)
         self.speed_combo.addItems(["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"])
         self.speed_combo.setCurrentText("1")
-        layout.addWidget(self.speed_combo)
-    
-        self.noise_button = QPushButton("🔇 Reduce Noise", self)
-        self.noise_button.clicked.connect(self.apply_noise_reduction)
-        layout.addWidget(self.noise_button)
-
-        self.echo_button = QPushButton("🎶 Add Echo", self)
-        self.echo_button.clicked.connect(self.add_echo)
-        layout.addWidget(self.echo_button)
-
-        self.revert_button = QPushButton("↩️ Revert Audio", self)
-        self.revert_button.clicked.connect(self.revert_audio)
-        layout.addWidget(self.revert_button)
-
-        self.play_button = QPushButton("⏯️ Play/Pause Audio", self)
-        self.play_button.clicked.connect(self.toggle_play_pause)
-        layout.addWidget(self.play_button)
-
-        self.freq_button = QPushButton("📊 Analyze Frequency", self)
-        self.freq_button.clicked.connect(self.analyze_frequency)
-        layout.addWidget(self.freq_button)
-
+        layout.addWidget(self.speed_combo, 7, 1)
+        
         self.progress_slider = QSlider(Qt.Orientation.Horizontal, self)
         self.progress_slider.setMinimum(0)
         self.progress_slider.setMaximum(100)
         self.progress_slider.setValue(0)
-        self.progress_slider.sliderReleased.connect(self.slider_released)
+        layout.addWidget(self.progress_slider, 8, 0, 1, 2)
         self.progress_slider.sliderPressed.connect(self.slider_pressed)
-        layout.addWidget(self.progress_slider)
-
-        self.stop_button = QPushButton("⏹️ Stop Audio", self)
-        self.stop_button.clicked.connect(self.stop_audio)
-        layout.addWidget(self.stop_button)
-
+        self.progress_slider.sliderReleased.connect(self.slider_released)
+        self.progress_slider.sliderMoved.connect(self.slider_moved)  # Add this line
+        
         self.save_button = QPushButton("💾 Save Processed Audio", self)
+        layout.addWidget(self.save_button, 9, 0, 1, 2)
         self.save_button.clicked.connect(self.save_audio)
-        layout.addWidget(self.save_button)
 
         self.setLayout(layout)
 
@@ -360,6 +368,12 @@ class AudioApp(QWidget):
         Temporarily disables slider updates while seeking.
         """
         self.seeking = True
+
+    def slider_moved(self, position):
+        """ Adjusts playback position dynamically while dragging the slider. """
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            new_index = int((position / 100.0) * len(self.worker.audio))
+            self.worker.index = new_index  # Update playback position
 
     def update_slider(self, progress):
         """
