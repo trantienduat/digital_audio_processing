@@ -398,44 +398,50 @@ class AudioApp(QWidget):
             self.status_label.setText(f"💾 File saved: {file_path}")
 
     def analyze_frequency(self):
-        """
-        Performs frequency analysis of the original and processed audio.
-        - Computes FFT to visualize frequency components.
-        - Displays a comparison plot of both signals.
-        """
         global recorded_audio, processed_audio
         if recorded_audio is None:
             self.status_label.setText("⚠️ No original audio available!")
             return
 
         self.status_label.setText("📊 Analyzing frequency...")
-        
+
         # Compute FFT for original audio
-        N_original = len(recorded_audio)
-        freq_original = np.fft.fftfreq(N_original, d=1/SAMPLE_RATE)
-        spectrum_original = np.abs(np.fft.fft(recorded_audio))
+        N_orig = len(recorded_audio)
+        freq_orig = np.fft.fftfreq(N_orig, d=1/SAMPLE_RATE)
+        spectrum_orig = np.abs(np.fft.fft(recorded_audio))
 
-        freq_processed, spectrum_processed = None, None
+        # Compute FFT for processed audio, if available
         if processed_audio is not None and len(processed_audio) > 0:
-            N_processed = len(processed_audio)
-            freq_processed = np.fft.fftfreq(N_processed, d=1/SAMPLE_RATE)
-            spectrum_processed = np.abs(np.fft.fft(processed_audio))
+            N_proc = len(processed_audio)
+            freq_proc = np.fft.fftfreq(N_proc, d=1/SAMPLE_RATE)
+            spectrum_proc = np.abs(np.fft.fft(processed_audio))
 
-        # Plot the frequency spectrum
-        plt.figure(figsize=(10, 5))
-        plt.plot(freq_original[:N_original//2], spectrum_original[:N_original//2], label="Original Audio", linestyle='dashed')
+            # Determine the significant frequency range for the processed audio
+            significant_indices = spectrum_proc > np.max(spectrum_proc) * 0.01  # Keep frequencies above 1% max amplitude
+            min_freq = np.min(freq_proc[significant_indices]) if np.any(significant_indices) else 0
+            max_freq = np.max(freq_proc[significant_indices]) if np.any(significant_indices) else np.max(freq_proc)
 
-        if freq_processed is not None:
-            plt.plot(freq_processed[:N_processed//2], spectrum_processed[:N_processed//2], label="Processed Audio")
+            # Convert negative frequencies to positive domain (mirror effect)
+            min_freq = max(0, min_freq)
+            max_freq = abs(max_freq)
 
-        plt.xlabel("Frequency (Hz)")
-        plt.ylabel("Amplitude")
-        plt.title("Frequency Spectrum Comparison")
-        plt.legend()
-        plt.grid()
-        plt.show()
+            # Plot the frequency comparison
+            plt.figure(figsize=(12, 6))
+            plt.plot(freq_orig[:N_orig//2], spectrum_orig[:N_orig//2], label="Original Audio", linestyle='dashed')
+            plt.plot(freq_proc[:N_proc//2], spectrum_proc[:N_proc//2], label="Processed Audio")
 
-        self.status_label.setText("✅ Frequency analysis completed!")
+            plt.xlim(min_freq, max_freq)  # Set x-axis limits based on min/max processed audio frequencies
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("Amplitude")
+            plt.title("Frequency Spectrum Comparison")
+            plt.legend()
+            plt.grid()
+            plt.tight_layout()
+            plt.show()
+
+            self.status_label.setText("✅ Frequency analysis completed!")
+        else:
+            self.status_label.setText("⚠️ No processed audio available!")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
