@@ -20,40 +20,57 @@ is_playing = False
 
 # Worker Thread to Import WAV Without Freezing UI
 class LoadWavWorker(QThread):
+    # Signal to update status messages
     update_status = pyqtSignal(str)
+    # Signal to emit the loaded WAV file as a NumPy array
     wav_loaded = pyqtSignal(np.ndarray)
 
     def __init__(self, file_path):
         super().__init__()
+        # Store the file path of the WAV file to be loaded
         self.file_path = file_path
 
     def run(self):
+        # Emit a status message indicating the start of the loading process
         self.update_status.emit("📂 Loading WAV file...")
         try:
+            # Load the WAV file using librosa with the specified sample rate and convert to mono
             audio, sr = librosa.load(self.file_path, sr=SAMPLE_RATE, mono=True)
+            # Emit the loaded audio data
             self.wav_loaded.emit(audio)
+            # Emit a status message indicating successful loading
             self.update_status.emit("✅ WAV File Imported Successfully!")
         except Exception as e:
+            # Emit a status message indicating an error occurred
             self.update_status.emit(f"❌ Error: {e}")
 
 
 class PlayAudioWorker(QThread):
+    # Signal to update the progress of audio playback
     update_progress = pyqtSignal(int)
+    # Signal to indicate that playback is done
     playback_done = pyqtSignal()
 
     def __init__(self, audio, speed=1.0):
         super().__init__()
+        # Store the audio data to be played
         self.audio = audio
+        # Store the playback speed
         self.speed = speed
+        # Flag to indicate if playback is paused
         self.paused = False
+        # Index to track the current position in the audio data
         self.index = 0.0
 
     def toggle_pause(self):
+        # Toggle the paused state
         self.paused = not self.paused
 
     def run(self):
         global is_playing
+        # Set the global flag to indicate that audio is playing
         is_playing = True
+        # Adjust the audio length if the playback speed is not 1.0
         if self.speed != 1.0:
             new_length = int(len(self.audio) / self.speed)
             self.audio = np.interp(np.linspace(0, len(self.audio), new_length), np.arange(len(self.audio)), self.audio)
@@ -61,6 +78,7 @@ class PlayAudioWorker(QThread):
         blocksize = 1024
 
         def callback(outdata, frames, time_info, status):
+            # If playback is paused, fill the output buffer with zeros
             if self.paused:
                 outdata.fill(0)
                 return
@@ -77,19 +95,24 @@ class PlayAudioWorker(QThread):
                 outdata[:, 0] = chunk
             self.index = int_new_pos
 
+        # Create an output stream with the specified callback
         stream = sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=callback, blocksize=blocksize)
         with stream:
             while self.index < len(self.audio):
                 if not is_playing:
+                    # If playback is stopped, reset progress and return
                     self.update_progress.emit(0)
                     return
+                # Update the progress based on the current index
                 progress = int((self.index / len(self.audio)) * 100)
                 self.update_progress.emit(progress)
                 time.sleep(0.05)
-            sd.sleep(100)  # Allow stream to flush out remaining audio
+            # Allow stream to flush out remaining audio
+            sd.sleep(100)
+        # Reset the global flag to indicate that playback is done
         is_playing = False
+        # Emit the playback done signal
         self.playback_done.emit()
-
 
 class AudioApp(QWidget):
     def __init__(self):
@@ -398,6 +421,11 @@ class AudioApp(QWidget):
             self.status_label.setText(f"💾 File saved: {file_path}")
 
     def analyze_frequency(self):
+        """
+        Analyzes the frequency spectrum of the original and processed audio.
+        - Computes and plots the FFT of both audio signals.
+        - Updates the status label after analysis.
+        """
         global recorded_audio, processed_audio
         if recorded_audio is None:
             self.status_label.setText("⚠️ No original audio available!")
