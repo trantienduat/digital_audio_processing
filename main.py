@@ -158,30 +158,50 @@ class AudioApp(QWidget):
         layout.addWidget(self.echo_button, 5, 1)
         self.echo_button.clicked.connect(self.add_echo)
         
+        # Echo Delay Time (Slider)
+        self.echo_delay_label = QLabel("Echo Delay (s): 0.2", self)
+        layout.addWidget(self.echo_delay_label, 6, 0)
+        self.echo_delay_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.echo_delay_slider.setMinimum(10)   # 0.1 sec (10 * 10ms)
+        self.echo_delay_slider.setMaximum(100)  # 1.0 sec (100 * 10ms)
+        self.echo_delay_slider.setValue(20)     # Default: 0.2 sec
+        layout.addWidget(self.echo_delay_slider, 6, 1)
+        self.echo_delay_slider.valueChanged.connect(self.update_echo_delay_label)
+
+        # Echo Strength (Slider)
+        self.echo_strength_label = QLabel("Echo Strength: 0.5", self)
+        layout.addWidget(self.echo_strength_label, 7, 0)
+        self.echo_strength_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.echo_strength_slider.setMinimum(10)   # 0.1 (10%)
+        self.echo_strength_slider.setMaximum(100)  # 1.0 (100%)
+        self.echo_strength_slider.setValue(50)     # Default: 0.5 (50%)
+        layout.addWidget(self.echo_strength_slider, 7, 1)
+        self.echo_strength_slider.valueChanged.connect(self.update_echo_strength_label)
+        
         self.freq_button = QPushButton("📊 Analyze Frequency", self)
-        layout.addWidget(self.freq_button, 6, 0, 1, 2)
+        layout.addWidget(self.freq_button, 8, 0, 1, 2)
         self.freq_button.clicked.connect(self.analyze_frequency)
         
         # Playback Speed & Save
         self.playback_speed_label = QLabel("Playback Speed:", self)
-        layout.addWidget(self.playback_speed_label, 7, 0)
+        layout.addWidget(self.playback_speed_label, 9, 0)
         
         self.speed_combo = QComboBox(self)
         self.speed_combo.addItems(["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"])
         self.speed_combo.setCurrentText("1")
-        layout.addWidget(self.speed_combo, 7, 1)
+        layout.addWidget(self.speed_combo, 9, 1)
         
         self.progress_slider = QSlider(Qt.Orientation.Horizontal, self)
         self.progress_slider.setMinimum(0)
         self.progress_slider.setMaximum(100)
         self.progress_slider.setValue(0)
-        layout.addWidget(self.progress_slider, 8, 0, 1, 2)
+        layout.addWidget(self.progress_slider, 10, 0, 1, 2)
         self.progress_slider.sliderPressed.connect(self.slider_pressed)
         self.progress_slider.sliderReleased.connect(self.slider_released)
-        self.progress_slider.sliderMoved.connect(self.slider_moved)  # Add this line
+        self.progress_slider.sliderMoved.connect(self.slider_moved)
         
         self.save_button = QPushButton("💾 Save Processed Audio", self)
-        layout.addWidget(self.save_button, 9, 0, 1, 2)
+        layout.addWidget(self.save_button, 11, 0, 1, 2)
         self.save_button.clicked.connect(self.save_audio)
 
         self.setLayout(layout)
@@ -293,23 +313,45 @@ class AudioApp(QWidget):
         self.status_label.setText("🔧 Reducing noise...")
         processed_audio = nr.reduce_noise(y=recorded_audio, sr=SAMPLE_RATE)
         self.status_label.setText("✅ Noise reduction applied!")
+        
+    def update_echo_delay_label(self):
+        delay_time = self.echo_delay_slider.value() / 100  # Convert to seconds
+        self.echo_delay_label.setText(f"Echo Delay (s): {delay_time:.2f}")
+
+    def update_echo_strength_label(self):
+        strength = self.echo_strength_slider.value() / 100  # Convert to scale 0-1
+        self.echo_strength_label.setText(f"Echo Strength: {strength:.2f}")
 
     def add_echo(self):
         """
-        Adds an echo effect to the processed audio.
-        - Delays the signal and overlays it with a reduced amplitude.
+        Adds an echo effect to the processed audio with adjustable delay and strength.
+        - Uses the delay and strength values set by the user.
         - Updates the status label after applying the effect.
         """
         global processed_audio
         if processed_audio is None:
             self.status_label.setText("⚠️ No processed audio available!")
             return
+        
         self.status_label.setText("🎶 Adding Echo effect...")
-        delay_samples = int(0.2 * SAMPLE_RATE)
+
+        # Get user-defined values from sliders
+        delay_time = self.echo_delay_slider.value() / 100  # Convert to seconds
+        strength = self.echo_strength_slider.value() / 100  # Convert to 0-1 scale
+
+        # Convert delay time to samples
+        delay_samples = int(delay_time * SAMPLE_RATE)
+
+        # Pad the audio to accommodate the delay
         echo_audio = np.pad(processed_audio, (0, delay_samples), mode='constant', constant_values=0)
-        echo_audio[delay_samples:] += processed_audio * 0.5
+
+        # Overlay the delayed signal with reduced amplitude
+        echo_audio[delay_samples:] += processed_audio * strength
+
+        # Update the processed audio with the echo effect
         processed_audio = echo_audio
-        self.status_label.setText("✅ Echo effect added!")
+
+        self.status_label.setText(f"✅ Echo added! (Delay: {delay_time}s, Strength: {strength})")
 
     def revert_audio(self):
         """
@@ -324,6 +366,8 @@ class AudioApp(QWidget):
         processed_audio = recorded_audio
         self.speed_combo.setCurrentText("1")
         self.status_label.setText("✅ Audio reverted to original!")
+        self.echo_strength_slider.setValue(50)
+        self.echo_delay_slider.setValue(20)
 
     def toggle_play_pause(self):
         """
